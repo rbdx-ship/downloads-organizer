@@ -47,7 +47,8 @@ class OrganizerTests(unittest.TestCase):
             shutil.copyfileobj(source, target)
 
     def test_policy_matches_original(self):
-        spec = importlib.util.spec_from_file_location('original_app', Path(__file__).resolve().parents[1] / 'downloads_organizer_app_step10_part2_repaired.py')
+        reference = Path(__file__).resolve().parent / 'reference' / 'downloads_organizer_app_step10_part2_repaired.py'
+        spec = importlib.util.spec_from_file_location('original_app', reference)
         original = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(original)
         self.assertEqual(config.POLICY_HASH, original.POLICY_HASH)

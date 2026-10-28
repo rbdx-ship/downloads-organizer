@@ -74,7 +74,8 @@ Do not edit the history database without first backing it up.
 The supported interface uses PySide6. The prior Tkinter interface is retained
 for development comparison at `downloads_organizer_tk.py`; it uses the original
 local-only configuration and does not implement the new setup wizard. The original
-`downloads_organizer_app_step10_part2_repaired.py` also remains as a backup.
+Step 10 script is preserved in `tests/reference/` as a historical backup used
+by the classification-policy comparison test; it is not the app launcher.
 The modular application separates settings and classification policy
 (`organizer/config.py`), rules and Ollama (`classifier.py`), cache (`cache.py`),
 file operations and history (`file_manager.py`), and the desktop interface

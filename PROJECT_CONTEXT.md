@@ -13,7 +13,7 @@ This project began as a practical AI-agents learning exercise alongside the Hugg
 
 ## Current application (updated 2026-10-27)
 - Launch `downloads_organizer.py` for the PySide6 interface; `downloads_organizer_tk.py` retains the prior Tkinter interface.
-- Application services live in `organizer/`. Earlier notebooks and scripts are under `archive/`; the repaired Step 10 script remains at the root as a backup.
+- Application services live in `organizer/`. Earlier notebooks and scripts are under `archive/`; the repaired Step 10 script is preserved in `tests/reference/` as a historical backup for the classification-policy comparison test.
 - Shared databases are `classification_cache.db` and `operation_history.db`. The app copies legacy databases to the new names only when needed and preserves the originals.
 - The PySide6 window lists the selected folder's files automatically, offers folder-specific categories, and classifies using Python rules plus Ollama. Classification cache validity includes the chosen category set.
 - The primary action changes from Classify to Review & organize. Ready files are checked by default; a select-all control supports bulk operations. A scrollable review and explicit YES confirmation precede moves.

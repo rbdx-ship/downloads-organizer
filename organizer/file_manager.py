@@ -98,6 +98,8 @@ def safe_destination(path, root=None, categories=None):
 def build_proposals(files, mode, root=None, name_overrides=None, categories=None, ai_config=None):
     if mode not in MODES:
         raise ValueError('Invalid operating mode')
+    mode = 'Organize only'
+    name_overrides = None
     root = validate_operation_folder(ROOT if root is None else root)
     allowed = CATEGORIES if categories is None else tuple(categories)
     proposals = []
@@ -161,6 +163,7 @@ def build_readonly_proposals(files, mode, root):
     root = validate_preview_folder(root)
     if mode not in MODES:
         raise ValueError('Invalid operating mode')
+    mode = 'Organize only'
     proposals = []
     for f in files:
         original = f['filename']
@@ -182,6 +185,8 @@ def build_readonly_proposals(files, mode, root):
 
 def revalidate(proposal, root=None):
     src, dst = proposal['src'], proposal['dst']
+    if src.name != dst.name:
+        return False, 'Renaming is disabled; original filenames must be preserved'
     root = validate_operation_folder(ROOT if root is None else root)
     allowed = proposal.get('categories', CATEGORIES)
     if proposal.get('root') != root or not safe_source(src, root) or not safe_destination(dst, root, allowed):

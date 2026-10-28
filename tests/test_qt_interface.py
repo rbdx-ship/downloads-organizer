@@ -113,9 +113,8 @@ class QtInterfaceTests(unittest.TestCase):
         self.window.categories = config.CATEGORIES
         self.window.analyze()
         self.window.table.selectRow(0)
-        with patch.object(qt_interface.QInputDialog, 'getText', return_value=('bill.pdf', True)):
-            self.window.edit_name()
-        self.assertEqual(self.window.proposals[0]['dst'].name, 'bill.pdf')
+        self.assertEqual(self.window.proposals[0]['dst'].name, 'invoice.pdf')
+        self.assertTrue(self.window.edit_btn.isHidden())
         with patch.object(qt_interface.QFileDialog, 'getExistingDirectory', return_value=str(other)), \
              patch.object(qt_interface.QInputDialog, 'getText', return_value=('no', True)):
             self.window.choose_folder()
@@ -293,15 +292,15 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertFalse(self.window.apply_btn.isHidden())
         self.assertTrue(self.window.apply_btn.isEnabled())
         self.assertIn('1 file', self.window.apply_btn.text())
-        self.assertFalse(self.window.table.isColumnHidden(2))
+        self.assertTrue(self.window.table.isColumnHidden(2))
         self.assertTrue(self.window.table.isColumnHidden(4))
         self.window.details_toggle.setChecked(True)
         self.assertFalse(self.window.table.isColumnHidden(4))
         self.assertEqual(self.window.selected_rows(), [0])
-        self.assertFalse(self.window.mode_box.isHidden())
+        self.assertTrue(self.window.mode_box.isHidden())
         self.assertFalse(self.window.edit_btn.isEnabled())
         self.window.table.selectRow(0)
-        self.assertTrue(self.window.edit_btn.isEnabled())
+        self.assertFalse(self.window.edit_btn.isEnabled())
         self.assertEqual(self.window.selected_rows(), [0])
 
         self.window.select_all.setCheckState(Qt.CheckState.Unchecked)

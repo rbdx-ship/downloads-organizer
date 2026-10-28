@@ -1,9 +1,8 @@
 # Hybrid Downloads Organizer
 
-![Downloads Organizer showing proposed filenames, categories, and the review action](docs/images/app-screenshot.png)
+![Downloads Organizer showing files and proposed categories](docs/images/app-screenshot.png)
 
-*The current PySide6 interface with synthetic example files and edited name
-suggestions. No personal files are shown.*
+*The application organizes files into category folders while preserving their original names.*
 
 Run the modular desktop application from PowerShell:
 
@@ -17,7 +16,7 @@ python downloads_organizer.py
 ## How to use the app
 
 Follow this flow from opening the app to reviewing and approving changes.
-Classifying files only proposes names and categories; it does not move or rename
+Classifying files only proposes categories; it does not move or rename
 them. Ready files are checked automatically, so you do not need to select every
 row yourself.
 
@@ -38,9 +37,8 @@ flowchart TD
     Classify --> Estimate["Review the estimated duration and confirm classification"]
     Estimate --> Run["Watch progress, elapsed time, and estimated time remaining"]
     Run --> Summary["View the classification summary chart"]
-    Summary --> Review["Review proposed names and categories; edit names or uncheck files as needed"]
-    Review --> Mode["Choose Rename + Organize, Organize only, or Rename only"]
-    Mode --> Organize["Click Review & organize"]
+    Summary --> Review["Review categories and uncheck files as needed"]
+    Review --> Organize["Click Review & organize"]
     Organize --> Preview["Review every proposed change in the confirmation window"]
     Preview --> Approve{"Approve and type YES?"}
     Approve -->|No| Review
@@ -124,8 +122,8 @@ that can use Python rules/cache, unique files requiring AI, and duplicate copies
 that can reuse results. OpenAI data consent is included in this confirmation when
 needed. Cancelling does not start new analysis. The app then runs Python rules
 and the configured AI provider for files that need it. In
-rules-only mode, ambiguous files remain unresolved. The table shows the proposed
-name and category. While AI is working, an animated spinner remains active,
+rules-only mode, ambiguous files remain unresolved. The table shows the original
+name and proposed category. While AI is working, an animated spinner remains active,
 and a progress bar advances as AI batches are checked. Elapsed time and an
 estimated remaining time range update every second. Initial estimates are rough
 heuristics; successful batches improve estimates for that provider/model during
@@ -138,8 +136,7 @@ finishes, a chart shows Python-rule results, AI results (including cached AI),
 and unresolved files. Ready files are checked by default; use the checkboxes or
 **Select all ready files** to adjust the selection. The main action becomes
 **Review & organize**, showing the checked file count; it opens a scrollable
-list of changes before confirmation. The organization mode is next to that
-button. Click a row to enable **Edit suggested name** above the table. Use
+list of changes before confirmation. Original filenames are preserved. Use
 **Show details** to see destinations, classification sources and duplicate counts.
 Use **Edit
 categories** to change a folder's list; `Other`
@@ -153,8 +150,7 @@ needed; it leaves the old databases in place as backups. The backups do not
 receive later updates. Check files and review the proposed changes
 before confirming any operation. Undo targets the latest completed batch in
 the currently selected folder and shows its recorded paths for review.
-Use **Edit suggested name** to change a test-file suggestion; the original
-extension is required and collisions are checked again in preview.
+Destination collisions are checked before moving files.
 If an operation is marked pending,
 inspect both paths and the operation history before deciding how to recover.
 Do not edit the history database without first backing it up.

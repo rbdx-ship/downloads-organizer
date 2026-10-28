@@ -404,6 +404,7 @@ class OrganizerWindow(QMainWindow):
         actions.addWidget(self.mode_label)
         self.mode_box = QComboBox()
         self.mode_box.addItems(MODES)
+        self.mode_box.setCurrentText('Organize only')
         self.mode_box.currentIndexChanged.connect(lambda _: self.prepare(preserve_checks=True))
         actions.addWidget(self.mode_box)
         self.ai_btn = self._button('Classify files', self.analyze, True)
@@ -466,18 +467,17 @@ class OrganizerWindow(QMainWindow):
         self.apply_btn.setVisible(reviewing and writable)
         self.apply_btn.setEnabled(idle and writable and checked > 0)
         self.apply_btn.setText(f'Review & organize {checked} {"file" if checked == 1 else "files"}')
-        self.mode_label.setVisible(reviewing and writable)
-        self.mode_box.setVisible(reviewing and writable)
-        self.mode_box.setEnabled(reviewing and writable)
+        self.mode_label.setVisible(False)
+        self.mode_box.setVisible(False)
+        self.mode_box.setEnabled(False)
         self.selection_bar.setVisible(reviewing and bool(self.proposals))
         self.select_all.setVisible(writable)
         self.selection_hint.setVisible(writable)
         self.select_all.setEnabled(idle and writable and ready > 0)
         self.details_toggle.setEnabled(idle)
-        self.edit_btn.setVisible(reviewing and writable and bool(self.files))
+        self.edit_btn.setVisible(False)
         focused = self.table.selectionModel().selectedRows()
-        self.edit_btn.setEnabled(reviewing and writable and len(focused) == 1
-                                 and self.mode_box.currentText() != 'Organize only')
+        self.edit_btn.setEnabled(False)
 
         self.table_title.setText('Review suggestions' if self.classified else 'Files in this folder')
         if self.busy:
@@ -488,7 +488,7 @@ class OrganizerWindow(QMainWindow):
             self.table_summary.setText(f'{len(self.files)} files')
         self.empty_label.setVisible(not self.files and idle)
         for column in (0, 2, 3, 4, 5, 6):
-            hidden = (not self.classified or (column == 0 and self.read_only)
+            hidden = (column == 2 or not self.classified or (column == 0 and self.read_only)
                       or (column in (4, 5, 6) and not self.details_toggle.isChecked()))
             self.table.setColumnHidden(column, hidden)
         if self.read_only:
@@ -500,7 +500,7 @@ class OrganizerWindow(QMainWindow):
             hint = 'Add files to this folder or choose another folder to begin.'
         elif not self.classified:
             hint = ('Start with Classify. You can review and edit the suggested categories first.' if self.categories is None
-                    else 'Classify files to get suggested names and categories. Files are changed only after your approval.')
+                    else 'Classify files to get suggested categories. Files are changed only after your approval.')
         elif not ready:
             hint = 'No files are ready to organize. Check their status, change the action, or classify again.'
         elif not checked:
@@ -579,7 +579,7 @@ class OrganizerWindow(QMainWindow):
                 read_only_reason = str(exc)
             else:
                 choice = QMessageBox.question(self, 'Folder access',
-                    f'Folder: {selected}\n\nAllow classification, approved renames/moves, and Undo here? '
+                    f'Folder: {selected}\n\nAllow classification, approved moves, and Undo here? '
                     'Only immediate files are scanned. Shared databases stay in the app data folder. '
                     'Choose No for read-only preview. No files change until you review and approve an operation.',
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
@@ -589,7 +589,7 @@ class OrganizerWindow(QMainWindow):
                 writable_external = choice == QMessageBox.StandardButton.Yes
                 read_only = not writable_external
         warning = ('\n\nREAD-ONLY: files can be previewed but not changed or analyzed.\n' + read_only_reason if read_only else
-                   '\n\nWRITABLE: classification can read document text. Approved operations can rename/move files here. '
+                   '\n\nWRITABLE: classification can read document text. Approved operations can move files here. '
                    'Back up important files first. Undo applies to this folder only.')
         answer, ok = QInputDialog.getText(self, 'Confirm folder change',
             f'Current: {self.selected_root}\nNew: {selected}{warning}\n\nThe current scan and preview will be cleared. Type YES to continue:')
@@ -653,8 +653,8 @@ class OrganizerWindow(QMainWindow):
             self.status.setText(f'{len(self.files)} files loaded from this folder.')
             return True
         try:
-            self.proposals = (build_readonly_proposals(self.files, self.mode_box.currentText(), self.selected_root)
-                              if self.read_only else build_proposals(self.files, self.mode_box.currentText(), self.selected_root, self.edited_names, self.categories, self.ai_config))
+            self.proposals = (build_readonly_proposals(self.files, 'Organize only', self.selected_root)
+                              if self.read_only else build_proposals(self.files, 'Organize only', self.selected_root, None, self.categories, self.ai_config))
         except Exception as exc:
             self.proposals = []
             self.table.setRowCount(0)

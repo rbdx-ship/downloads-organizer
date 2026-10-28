@@ -52,7 +52,7 @@ class OrganizerApp:
         self.preview_root = None
         self.queue = Queue()
         self.busy = False
-        self.mode = tk.StringVar(value=MODES[0])
+        self.mode = tk.StringVar(value='Organize only')
         history_init()
 
         main = ttk.Frame(window, padding=(34, 27, 34, 18))
@@ -79,7 +79,6 @@ class OrganizerApp:
         ttk.Label(buttons, text='Action').pack(side='left', padx=(12, 6))
         self.mode_box = ttk.Combobox(buttons, textvariable=self.mode, values=MODES,
                                      state='readonly', width=21)
-        self.mode_box.pack(side='left', padx=(0, 8))
         self.mode_box.bind('<<ComboboxSelected>>', lambda event: self.prepare())
         self.preview_btn = ttk.Button(buttons, text='3  Preview', command=self.show_preview)
         self.preview_btn.pack(side='left')
@@ -117,7 +116,6 @@ class OrganizerApp:
         self.undo_btn = ttk.Button(actions, text='Undo last batch', command=self.confirm_undo)
         self.undo_btn.pack(side='left', padx=(0, 8))
         self.edit_btn = ttk.Button(actions, text='Edit suggested name', command=self.edit_name)
-        self.edit_btn.pack(side='left')
         self.status = tk.StringVar(value='Ready. Scan files to begin.')
         ttk.Label(main, textvariable=self.status, padding=(0, 12, 0, 0),
                   style='Subtitle.TLabel').pack(fill='x', side='bottom')

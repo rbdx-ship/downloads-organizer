@@ -293,10 +293,19 @@ class OrganizerTests(unittest.TestCase):
         (self.root / 'Finance' / 'taken.pdf').write_bytes(b'other')
         proposals = file_manager.build_proposals(classifier.scan(), 'Rename + Organize', self.root,
                                                   {'invoice.pdf': 'taken.pdf'})
-        self.assertEqual(proposals[0]['issue'], 'Destination already exists')
+        self.assertEqual(proposals[0]['dst'].name, 'invoice.pdf')
+
+    def test_apply_rejects_tampered_rename_proposal(self):
+        self.file('invoice.pdf')
+        file_manager.history_init()
+        proposal = file_manager.build_proposals(classifier.scan(), 'Organize only')[0]
+        proposal['dst'] = proposal['dst'].with_name('renamed.pdf')
+        result = file_manager.apply_proposals([proposal])
+        self.assertIn('Renaming is disabled', result[0][1])
+        self.assertTrue((self.root / 'invoice.pdf').is_file())
         proposals = file_manager.build_proposals(classifier.scan(), 'Rename + Organize', self.root,
                                                   {'invoice.pdf': '../bad.pdf'})
-        self.assertEqual(proposals[0]['issue'], 'Unsafe filename or changed extension')
+        self.assertEqual(proposals[0]['dst'].name, 'invoice.pdf')
 
     def test_edit_name_invalidates_gui_preview(self):
         self.file('invoice.pdf')
@@ -309,10 +318,9 @@ class OrganizerTests(unittest.TestCase):
                 with patch.object(interface.messagebox, 'showinfo'):
                     app.show_preview()
                 app.tree.selection_set('file:0')
-                with patch.object(interface.simpledialog, 'askstring', return_value='bill.pdf'):
+                with patch.object(interface.messagebox, 'showinfo'):
                     app.edit_name()
-                self.assertIsNone(app.preview_root)
-                self.assertEqual(app.proposals[0]['dst'].name, 'bill.pdf')
+                self.assertEqual(app.proposals[0]['dst'].name, 'invoice.pdf')
                 self.assertTrue((self.root / 'invoice.pdf').exists())
             finally:
                 window.destroy()

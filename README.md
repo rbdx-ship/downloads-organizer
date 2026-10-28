@@ -1,5 +1,10 @@
 # Hybrid Downloads Organizer
 
+![Downloads Organizer showing proposed filenames, categories, and the review action](docs/images/app-screenshot.png)
+
+*The current PySide6 interface with synthetic example files and edited name
+suggestions. No personal files are shown.*
+
 Run the modular desktop application from PowerShell:
 
 ```powershell

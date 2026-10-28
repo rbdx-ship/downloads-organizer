@@ -32,7 +32,7 @@ class AISetupDialog(QDialog):
         self.signals.finished.connect(self.on_finished)
         self.setStyleSheet('''
             QDialog { background: white; }
-            QMessageBox, QInputDialog { background: #ffffff; color: #183d37; }
+            QMessageBox, QInputDialog { background: #ffffff; color: #183d37; min-width: 560px; }
             QMessageBox QLabel, QInputDialog QLabel { color: #183d37; background: transparent; }
             QWidget { color: #183d37; font-family: 'Segoe UI'; font-size: 10pt; }
             QLabel#title { font-size: 20pt; font-weight: 700; }

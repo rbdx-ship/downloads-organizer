@@ -11,7 +11,7 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication, QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFrame,
     QHeaderView, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
-    QProgressBar, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QProgressBar, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QLineEdit,
 )
 
 from .config import ROOT, MODES, validate_test_folder, validate_preview_folder, is_real_downloads
@@ -35,6 +35,7 @@ QMainWindow { background: #103b37; }
 QWidget#shell { background: #103b37; }
 QWidget { font-family: 'Segoe UI'; font-size: 10pt; color: #183d37; }
 QMessageBox, QInputDialog { background-color: #ffffff; color: #183d37; }
+QMessageBox, QInputDialog { min-width: 560px; }
 QMessageBox QLabel, QInputDialog QLabel { color: #183d37; background: transparent; }
 QInputDialog QLineEdit, QInputDialog QTextEdit, QInputDialog QPlainTextEdit { background: #ffffff; color: #183d37; border: 1px solid #a7beb2; }
 QFrame#surface { background: #ffffff; border-radius: 18px; }
@@ -143,7 +144,7 @@ class ClassificationSummary(QDialog):
     def __init__(self, counts, parent=None):
         super().__init__(parent)
         self.setWindowTitle('Classification complete')
-        self.setMinimumWidth(490)
+        self.setMinimumSize(600, 390)
         self.setStyleSheet('QDialog { background: white; } QLabel { color: #183d37; font-family: Segoe UI; font-size: 10pt; }')
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 22)
@@ -184,28 +185,82 @@ class ApprovalDialog(QDialog):
     def __init__(self, root, proposals, parent=None):
         super().__init__(parent)
         self.setWindowTitle('Review selected changes')
-        self.resize(850, 500)
+        self.resize(1000, 650)
+        self.setMinimumSize(700, 450)
+        self.setStyleSheet(STYLE + ' QDialog { background: white; }')
         layout = QVBoxLayout(self)
-        title = QLabel(f'Review {len(proposals)} proposed changes')
-        title.setStyleSheet('font-size: 14pt; font-weight: 700;')
+        layout.setContentsMargins(30, 28, 30, 26)
+        layout.setSpacing(16)
+        title = QLabel(f'Review {len(proposals)} files before moving')
+        title.setStyleSheet('font-size: 20pt; font-weight: 700; color: #143a35;')
         layout.addWidget(title)
-        path = QLabel(f'Folder: {root}\nNo files have been moved. Review the list, then continue to confirmation.')
+        path = QLabel(f'CURRENT FOLDER\n{root}')
         path.setWordWrap(True)
+        path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        path.setStyleSheet('background: #f0f6f3; color: #244d44; border-radius: 10px; padding: 16px;')
         layout.addWidget(path)
+        hint = QLabel('Review the full list below. Original filenames stay the same. No files have been moved yet.')
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
         table = QTableWidget(len(proposals), 2)
         table.setHorizontalHeaderLabels(['Current file', 'Proposed destination'])
         table.verticalHeader().hide()
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         for row, proposal in enumerate(proposals):
-            table.setItem(row, 0, QTableWidgetItem(proposal['original']))
-            table.setItem(row, 1, QTableWidgetItem(str(proposal['dst'].relative_to(root))))
+            for column, value in enumerate((proposal['original'], str(proposal['dst'].relative_to(root)))):
+                item = QTableWidgetItem(value)
+                item.setToolTip(value)
+                table.setItem(row, column, item)
         layout.addWidget(table, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText('Continue')
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText('Continue to confirmation')
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName('primary')
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+
+class ConfirmMoveDialog(QDialog):
+    """A separate, explicit YES confirmation after the complete review."""
+    def __init__(self, root, count, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Confirm file moves')
+        self.resize(680, 380)
+        self.setMinimumSize(600, 340)
+        self.setStyleSheet(STYLE + ' QDialog { background: white; }')
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(32, 30, 32, 28)
+        layout.setSpacing(15)
+        title = QLabel('Ready to organize?')
+        title.setStyleSheet('font-size: 20pt; font-weight: 700; color: #143a35;')
+        layout.addWidget(title)
+        summary = QLabel(f'{count} {"file" if count == 1 else "files"} will be moved into category folders.\n\nFolder: {root}')
+        summary.setWordWrap(True)
+        summary.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        summary.setStyleSheet('background: #f0f6f3; color: #244d44; border-radius: 10px; padding: 16px;')
+        layout.addWidget(summary)
+        explanation = QLabel('Original filenames are preserved. You can use Undo for this folder after the move.')
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
+        layout.addWidget(QLabel('Type YES to confirm'))
+        self.answer = QLineEdit()
+        self.answer.setPlaceholderText('YES')
+        self.answer.setStyleSheet('background: white; color: #183d37; border: 1px solid #a7beb2; border-radius: 7px; padding: 10px;')
+        layout.addWidget(self.answer)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.confirm_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self.confirm_button.setText('Move files')
+        self.confirm_button.setObjectName('primary')
+        self.confirm_button.setEnabled(False)
+        self.answer.textChanged.connect(lambda text: self.confirm_button.setEnabled(text == 'YES'))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def accept(self):
+        if self.answer.text() == 'YES':
+            super().accept()
 
 
 class OrganizerWindow(QMainWindow):
@@ -281,15 +336,6 @@ class OrganizerWindow(QMainWindow):
         main.addLayout(header)
         self.intro_label = self._label('Choose a folder. Classify its files. Review and organize.', 'subtitle')
         main.addWidget(self.intro_label)
-
-        steps = QHBoxLayout()
-        steps.setSpacing(8)
-        self.step_labels = []
-        for text in ('1  Your folder', '2  Classify files', '3  Review & organize'):
-            label = self._label(text, 'step')
-            self.step_labels.append(label)
-            steps.addWidget(label, 1)
-        main.addLayout(steps)
 
         card = QFrame()
         card.setObjectName('folderCard')
@@ -437,8 +483,6 @@ class OrganizerWindow(QMainWindow):
         self._compact = compact
         self.intro_label.setVisible(not compact)
         self.next_hint.setVisible(not compact)
-        for label in self.step_labels:
-            label.setVisible(not compact)
         self.main_layout.setSpacing(8 if compact else 12)
         if compact:
             self.main_layout.setContentsMargins(24, 18, 24, 18)
@@ -522,11 +566,6 @@ class OrganizerWindow(QMainWindow):
         self.next_hint.setText(hint)
         self.provider_label.setText(self.ai_config.label)
         self.provider_label.setToolTip(self.ai_config.label)
-        active_step = 0 if self.read_only else 2 if reviewing else 1
-        for index, label in enumerate(self.step_labels):
-            label.setProperty('active', index == active_step)
-            label.style().unpolish(label)
-            label.style().polish(label)
 
     def refresh_history_state(self):
         if self.read_only:
@@ -966,9 +1005,7 @@ class OrganizerWindow(QMainWindow):
             return
         if ApprovalDialog(self.selected_root, choices, self).exec() != QDialog.DialogCode.Accepted:
             return
-        answer, ok = QInputDialog.getText(self, 'Confirm operations',
-                                        f'Folder: {self.selected_root}\nType YES to perform these approved file changes:')
-        if not ok or answer != 'YES':
+        if ConfirmMoveDialog(self.selected_root, len(choices), self).exec() != QDialog.DialogCode.Accepted:
             self.status.setText('Cancelled. No actions taken.')
             return
         try:
@@ -1017,7 +1054,7 @@ class OrganizerWindow(QMainWindow):
 
 def main():
     app = QApplication.instance() or QApplication(sys.argv)
-    app.setStyleSheet('QMessageBox, QInputDialog { background: #ffffff; color: #183d37; } '
+    app.setStyleSheet('QMessageBox, QInputDialog { background: #ffffff; color: #183d37; min-width: 560px; } '
                       'QMessageBox QLabel, QInputDialog QLabel { color: #183d37; background: transparent; } '
                       'QInputDialog QLineEdit, QInputDialog QTextEdit, QInputDialog QPlainTextEdit '
                       '{ background: white; color: #183d37; }')

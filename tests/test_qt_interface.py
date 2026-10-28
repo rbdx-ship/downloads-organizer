@@ -97,13 +97,40 @@ class QtInterfaceTests(unittest.TestCase):
         self.assertTrue((self.root / 'invoice.pdf').exists())
         with patch.object(qt_interface.QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes), \
              patch.object(qt_interface.ApprovalDialog, 'exec', return_value=QDialog.DialogCode.Accepted), \
-             patch.object(qt_interface.QInputDialog, 'getText', return_value=('YES', True)), \
+             patch.object(qt_interface.ConfirmMoveDialog, 'exec', return_value=QDialog.DialogCode.Accepted), \
              patch.object(qt_interface.QMessageBox, 'information'), \
              patch.object(file_manager.os, 'link', side_effect=self.simulated_link):
             self.window.confirm_apply()
             self.assertTrue((self.root / 'Finance' / 'invoice.pdf').exists())
             self.window.confirm_undo()
         self.assertEqual((self.root / 'invoice.pdf').read_bytes(), b'fixture')
+
+    def test_move_confirmation_requires_exact_yes(self):
+        dialog = qt_interface.ConfirmMoveDialog(self.root, 1)
+        try:
+            self.assertFalse(dialog.confirm_button.isEnabled())
+            dialog.answer.setText('yes')
+            dialog.accept()
+            self.assertNotEqual(dialog.result(), QDialog.DialogCode.Accepted)
+            self.assertFalse(dialog.confirm_button.isEnabled())
+            dialog.answer.setText('YES')
+            self.assertTrue(dialog.confirm_button.isEnabled())
+            dialog.accept()
+            self.assertEqual(dialog.result(), QDialog.DialogCode.Accepted)
+        finally:
+            dialog.close()
+
+    def test_cancel_final_confirmation_never_moves(self):
+        (self.root / 'invoice.pdf').write_bytes(b'fixture')
+        self.window.refresh()
+        self.window.categories = config.CATEGORIES
+        self.window.analyze()
+        with patch.object(qt_interface.ApprovalDialog, 'exec', return_value=QDialog.DialogCode.Accepted), \
+             patch.object(qt_interface.ConfirmMoveDialog, 'exec', return_value=QDialog.DialogCode.Rejected), \
+             patch.object(qt_interface, 'apply_proposals') as apply:
+            self.window.confirm_apply()
+        apply.assert_not_called()
+        self.assertTrue((self.root / 'invoice.pdf').exists())
 
     def test_folder_confirmation_and_edit(self):
         (self.root / 'invoice.pdf').write_bytes(b'fixture')

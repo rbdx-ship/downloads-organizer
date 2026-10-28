@@ -12,6 +12,7 @@ This project began as a practical AI-agents learning exercise alongside the Hugg
 - SQLite stores classification results and later operation history.
 
 ## Current application (updated 2026-10-28)
+- The top step bar was removed. Classification summary and common popup windows are larger. The move workflow has a spacious scrollable full-list review followed by a distinct large final confirmation, where Move files remains disabled until exact `YES` is entered. Cancellation at either stage does not move files.
 - The real Windows Downloads folder can now be selected after a dedicated safety review and explicit user request. Its first selection is read-only; a successful preview of the same folder identity is required before a second selection can enable writes with Yes and typed YES. Every move still requires a full review and separate YES. This flow has only been tested with disposable simulated paths, not the user's Downloads files. Popup surfaces use explicit light backgrounds and dark text.
 - Launch `downloads_organizer.py` for the PySide6 interface; `downloads_organizer_tk.py` retains the prior Tkinter interface.
 - Application services live in `organizer/`. Earlier notebooks and scripts are under `archive/`; the repaired Step 10 script is preserved in `tests/reference/` as a historical backup for the classification-policy comparison test.

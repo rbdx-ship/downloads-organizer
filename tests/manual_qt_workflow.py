@@ -25,6 +25,7 @@ def run():
              patch.object(qt_interface.QMessageBox, 'critical') as error, \
              patch.object(qt_interface.ClassificationSummary, 'exec', return_value=1) as summary, \
              patch.object(qt_interface.ApprovalDialog, 'exec', return_value=QDialog.DialogCode.Accepted) as review, \
+             patch.object(qt_interface.ConfirmMoveDialog, 'exec', return_value=QDialog.DialogCode.Accepted), \
              patch.object(qt_interface.QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes), \
              patch.object(qt_interface.QInputDialog, 'getText', return_value=('YES', True)):
             window = qt_interface.OrganizerWindow(root=root)

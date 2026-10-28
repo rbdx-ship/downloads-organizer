@@ -40,6 +40,7 @@ def run():
         stack.enter_context(patch.object(qt_interface.QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes))
         stack.enter_context(patch.object(qt_interface.QInputDialog, 'getText', return_value=('YES', True)))
         review = stack.enter_context(patch.object(qt_interface.ApprovalDialog, 'exec', return_value=QDialog.DialogCode.Accepted))
+        stack.enter_context(patch.object(qt_interface.ConfirmMoveDialog, 'exec', return_value=QDialog.DialogCode.Accepted))
         stack.enter_context(patch.object(qt_interface.ClassificationSummary, 'exec', return_value=1))
         stack.enter_context(patch.object(qt_interface.QMessageBox, 'information'))
         errors = stack.enter_context(patch.object(qt_interface.QMessageBox, 'critical'))

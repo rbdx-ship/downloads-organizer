@@ -1,0 +1,9 @@
+PySide6-Essentials>=6.8,<7
+ollama
+pydantic
+PyMuPDF
+python-docx
+openai>=1.68
+keyring>=25
+psutil
+httpx>=0.27

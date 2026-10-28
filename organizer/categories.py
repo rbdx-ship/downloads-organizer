@@ -4,7 +4,8 @@ import json
 import sqlite3
 from pathlib import Path
 from . import file_manager
-from .config import INVALID_CHARS, WINDOWS_RESERVED, validate_test_folder
+from .config import INVALID_CHARS, WINDOWS_RESERVED
+from .folder_access import validate_operation_folder
 
 SUGGESTED = ('Career', 'Finance', 'Learning', 'Images', 'Other')
 
@@ -26,7 +27,7 @@ def validate_categories(names):
 
 
 def load(root):
-    root = validate_test_folder(Path(root))
+    root = validate_operation_folder(Path(root))
     with closing(file_manager.history_connect()) as conn:
         if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='folder_categories'").fetchone():
             return None
@@ -35,7 +36,7 @@ def load(root):
 
 
 def save(root, names):
-    root = validate_test_folder(Path(root))
+    root = validate_operation_folder(Path(root))
     cleaned = validate_categories(names)
     with closing(file_manager.history_connect()) as conn, conn:
         conn.execute('CREATE TABLE IF NOT EXISTS folder_categories (folder TEXT PRIMARY KEY, categories TEXT NOT NULL)')

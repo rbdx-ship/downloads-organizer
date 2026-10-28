@@ -54,8 +54,9 @@ If you cancel first-time setup, the app uses Python rules only for that session
 and asks again next launch. OpenAI asks for consent before each classification
 run that sends document information. Files with unresolved classifications or
 safety issues cannot be included in an operation; review their status first.
-File changes and Undo currently work only within `test-downloads` and its
-unlinked subfolders. The real Windows Downloads folder is blocked.
+The app starts safely in `test-downloads`. Other eligible local folders can be
+approved for file changes as described below. The real Windows Downloads folder
+is still blocked.
 
 On first launch, an **AI setup** dialog offers local Ollama, the OpenAI API, or
 Python rules only. This choice can be changed later with **AI settings** in the
@@ -81,12 +82,22 @@ Development data remains in the project folder. Packaged builds use
 `%LOCALAPPDATA%\Downloads Organizer` for data/settings and the default test folder.
 
 The application starts in `test-downloads`. Use **Change folder** to select
-that folder or an unlinked subfolder inside it for file operations. Other
-eligible folders can be opened in **read-only** mode, which lists immediate
-files and previews filename-based rules without content extraction, Ollama,
-cache writes, renames, moves or Undo. The real Windows Downloads folder remains
-blocked pending its separate review and authorization. The selected path and
-mode are shown in the window. Folder actions (**Change folder**, **Refresh** and
+another folder. For an eligible external folder, choose **Yes** to enable
+classification and approved file changes, **No** for read-only preview, or
+**Cancel** to keep the current folder. Review the warning and type exactly
+`YES` to switch. Writable external folders must be on a fixed local NTFS drive;
+system/application folders, hidden folders, known cloud-sync locations, network
+and removable drives, links and junctions are excluded. Choose a dedicated data
+folder and back up important files before using it. The real Windows Downloads
+folder remains blocked pending its separate authorization.
+
+Writable-folder approval lasts only for the current app session and only for
+the selected folder, not all its subfolders. On a later launch, select and approve
+it again. Only immediate files are scanned; category folders are not recursively
+organized. Read-only preview lists files and applies filename rules without
+content extraction, AI calls, cache writes, file changes or Undo. The selected path and
+mode (**Test folder**, **Approved folder**, or **Read-only preview**) are shown in
+the window. Folder actions (**Change folder**, **Refresh** and
 **Edit categories**) are grouped in the folder card. On opening a test folder,
 the app lists its files. The main action at the bottom right is **Classify**.
 Click it to review five starter categories (editable per folder), then
@@ -164,3 +175,14 @@ python -B tests\manual_ai_setup.py
 ```
 
 This does not download/install software, store an API key, or call OpenAI.
+
+To repeat the external-folder smoke test on Windows:
+
+```powershell
+python -B tests\manual_external_workflow.py
+```
+
+It creates and removes a disposable sibling folder outside the checkout, uses
+isolated databases inside `test-downloads`, and automates its own confirmations.
+It exercises the actual Windows move engine, folder-specific categories, and
+Undo after reopening. It does not use personal files or call AI.

@@ -49,6 +49,8 @@ WINDOWS_RESERVED = {'CON', 'PRN', 'AUX', 'NUL', *(f'COM{i}' for i in range(1, 10
 
 def validate_test_folder(folder):
     """Accept only real directories inside the fixed test boundary."""
+    if any(p.is_symlink() or p.is_junction() for p in (ROOT, *ROOT.parents)):
+        raise ValueError('The test folder and its parents must not be links or junctions.')
     boundary = ROOT.resolve(strict=True)
     candidate = Path(folder).absolute()
     try:

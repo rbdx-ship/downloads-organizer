@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from .config import *
 from .file_identity import file_sha256
+from .folder_access import validate_operation_folder
 
 def rule_classify(filename: str) -> str | None:
     path = Path(filename)
@@ -16,7 +17,7 @@ def rule_classify(filename: str) -> str | None:
 
 
 def scan(root=None):
-    root = validate_test_folder(ROOT if root is None else root)
+    root = validate_operation_folder(ROOT if root is None else root)
     if not root.is_dir():
         raise FileNotFoundError(f'Test folder not found: {root}')
     out = []
@@ -25,6 +26,7 @@ def scan(root=None):
             continue
         stat = p.stat()
         out.append({'filename': p.name, 'path': str(p), 'extension': p.suffix.lower(),
+                    'identity': (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns),
                     'size': stat.st_size, 'mtime_ns': stat.st_mtime_ns,
                     'rule_category': rule_classify(p.name), 'sha256': file_sha256(p)})
     return out

@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
 )
 
 from .config import ROOT, MODES, validate_test_folder, validate_preview_folder
+from .folder_access import (validate_operation_folder, validate_external_folder,
+                            authorize_folder, is_test_folder)
 from .classifier import scan, scan_readonly, analyze_files
 from .cache import cached_result, content_cache_write
 from .database_migration import migrate_legacy_databases
@@ -202,7 +204,7 @@ class ApprovalDialog(QDialog):
 class OrganizerWindow(QMainWindow):
     def __init__(self, root=None, ai_config=None):
         super().__init__()
-        self.selected_root = validate_test_folder(ROOT if root is None else root)
+        self.selected_root = validate_operation_folder(ROOT if root is None else root)
         self.files, self.proposals, self.edited_names = [], [], {}
         self.read_only = False
         self.classified = False
@@ -403,7 +405,8 @@ class OrganizerWindow(QMainWindow):
 
     def _update_folder_label(self):
         self.folder_label.setText(str(self.selected_root))
-        self.mode_badge.setText('Read-only preview' if self.read_only else 'Test folder')
+        self.mode_badge.setText('Read-only preview' if self.read_only else
+                               'Test folder' if is_test_folder(self.selected_root) else 'Approved folder')
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -475,7 +478,7 @@ class OrganizerWindow(QMainWindow):
             self.table.setColumnHidden(column, hidden)
         if self.read_only:
             self.category_summary.setText('Filename rules only. Classification settings and file changes are unavailable here.')
-            hint = 'Read-only preview. Choose a test folder to classify and organize files.'
+            hint = 'Read-only preview. Choose an eligible local folder and approve file changes to classify and organize.'
         elif self.busy:
             hint = 'Please wait. Suggestions will appear here when classification finishes.'
         elif not self.files:
@@ -537,7 +540,7 @@ class OrganizerWindow(QMainWindow):
     def choose_folder(self):
         if self.busy:
             return
-        folder = QFileDialog.getExistingDirectory(self, 'Choose a folder to preview', str(self.selected_root))
+        folder = QFileDialog.getExistingDirectory(self, 'Choose a folder', str(self.selected_root))
         if not folder:
             return
         try:
@@ -548,13 +551,38 @@ class OrganizerWindow(QMainWindow):
         except (OSError, ValueError) as exc:
             QMessageBox.critical(self, 'Folder unavailable', str(exc))
             return
-        if selected == self.selected_root:
+        if selected == self.selected_root and not self.read_only:
             return
-        warning = '\n\nREAD-ONLY: files can be previewed but not changed or analyzed.' if read_only else ''
+        writable_external = False
+        if read_only:
+            try:
+                validate_external_folder(selected)
+            except (OSError, ValueError):
+                pass  # Ineligible writable folders can still use the existing read-only preview.
+            else:
+                choice = QMessageBox.question(self, 'Folder access',
+                    f'Folder: {selected}\n\nAllow classification, approved renames/moves, and Undo here? '
+                    'Only immediate files are scanned. Shared databases stay in the app data folder. '
+                    'Choose No for read-only preview. No files change until you review and approve an operation.',
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.No)
+                if choice == QMessageBox.StandardButton.Cancel:
+                    return
+                writable_external = choice == QMessageBox.StandardButton.Yes
+                read_only = not writable_external
+        warning = ('\n\nREAD-ONLY: files can be previewed but not changed or analyzed.' if read_only else
+                   '\n\nWRITABLE: classification can read document text. Approved operations can rename/move files here. '
+                   'Back up important files first. Undo applies to this folder only.')
         answer, ok = QInputDialog.getText(self, 'Confirm folder change',
             f'Current: {self.selected_root}\nNew: {selected}{warning}\n\nThe current scan and preview will be cleared. Type YES to continue:')
         if not ok or answer != 'YES':
             return
+        if writable_external:
+            try:
+                authorize_folder(selected)
+            except (OSError, ValueError) as exc:
+                QMessageBox.critical(self, 'Folder unavailable', str(exc))
+                return
         self.selected_root, self.read_only = selected, read_only
         self.has_undo = False
         self.categories = None if read_only else category_store.load(selected)
@@ -823,7 +851,8 @@ class OrganizerWindow(QMainWindow):
             return
         if ApprovalDialog(self.selected_root, choices, self).exec() != QDialog.DialogCode.Accepted:
             return
-        answer, ok = QInputDialog.getText(self, 'Confirm operations', 'Type YES to perform these test-file moves:')
+        answer, ok = QInputDialog.getText(self, 'Confirm operations',
+                                        f'Folder: {self.selected_root}\nType YES to perform these approved file changes:')
         if not ok or answer != 'YES':
             self.status.setText('Cancelled. No actions taken.')
             return

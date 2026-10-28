@@ -123,6 +123,44 @@ class QtInterfaceTests(unittest.TestCase):
             self.assertTrue(self.window.edit_categories())
         self.assertFalse(self.window.classified)
 
+    def test_external_folder_requires_mode_choice_and_exact_yes(self):
+        other = self.root / 'external-mode-fixture'
+        other.mkdir()
+        with patch.object(qt_interface.QFileDialog, 'getExistingDirectory', return_value=str(other)), \
+             patch.object(qt_interface, 'validate_test_folder', side_effect=ValueError('External')), \
+             patch.object(qt_interface, 'validate_preview_folder', return_value=other), \
+             patch.object(qt_interface, 'validate_external_folder', return_value=other), \
+             patch.object(qt_interface.QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes), \
+             patch.object(qt_interface.QInputDialog, 'getText', return_value=('yes', True)), \
+             patch.object(qt_interface, 'authorize_folder') as authorize:
+            self.window.choose_folder()
+            self.assertEqual(self.window.selected_root, self.root)
+            authorize.assert_not_called()
+            with patch.object(qt_interface.QInputDialog, 'getText', return_value=('YES', True)):
+                self.window.choose_folder()
+            authorize.assert_called_once_with(other)
+            self.assertEqual(self.window.selected_root, other)
+            self.assertFalse(self.window.read_only)
+
+    def test_external_readonly_choice_never_grants_write_access(self):
+        other = self.root / 'readonly-fixture'
+        other.mkdir()
+        with patch.object(qt_interface.QFileDialog, 'getExistingDirectory', return_value=str(other)), \
+             patch.object(qt_interface, 'validate_test_folder', side_effect=ValueError('External')), \
+             patch.object(qt_interface, 'validate_preview_folder', return_value=other), \
+             patch.object(qt_interface, 'validate_external_folder', return_value=other), \
+             patch.object(qt_interface.QMessageBox, 'question', return_value=QMessageBox.StandardButton.No), \
+             patch.object(qt_interface.QInputDialog, 'getText', return_value=('YES', True)), \
+             patch.object(qt_interface, 'authorize_folder') as authorize:
+            self.window.choose_folder()
+            authorize.assert_not_called()
+            self.assertTrue(self.window.read_only)
+            # Selecting this same folder again can upgrade from read-only after consent.
+            with patch.object(qt_interface.QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
+                self.window.choose_folder()
+            authorize.assert_called_once_with(other)
+            self.assertFalse(self.window.read_only)
+
     def test_select_all_checks_only_ready_files(self):
         (self.root / 'invoice.pdf').write_bytes(b'finance')
         (self.root / 'course.txt').write_bytes(b'learning')

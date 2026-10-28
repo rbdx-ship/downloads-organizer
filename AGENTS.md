@@ -40,3 +40,4 @@ Develop and maintain a local-first Windows desktop application that organizes do
 - Local model managed by Ollama; inspect installed models instead of assuming a specific one is available.
 - Keep `.venv/`, database files, documents and test artifacts out of version control unless intentionally anonymized fixtures.
 - When a request changes classification categories, rules, prompts, model or extraction logic, ensure corresponding cache policy invalidation.
+- Approved external-folder support is documented in `SAFETY_REVIEW.md`. Keep routine fixtures in `test-downloads`; only the opt-in external smoke test creates a disposable sibling folder. Real Downloads remains blocked. Never use personal files for automated tests.

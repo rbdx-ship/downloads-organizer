@@ -9,6 +9,7 @@ from pathlib import Path
 from .config import *
 from .cache import cached_result
 from .file_identity import file_sha256
+from .folder_access import validate_operation_folder, is_test_folder
 
 def utc_now():
     return datetime.now(timezone.utc).isoformat()
@@ -75,13 +76,13 @@ def existing_path_casefold(parent, name):
 
 
 def safe_source(path, root=None):
-    root = validate_test_folder(ROOT if root is None else root)
+    root = validate_operation_folder(ROOT if root is None else root)
     return (path.parent == root and not path.is_symlink() and path.is_file()
             and path.resolve().parent == root)
 
 
 def safe_destination(path, root=None, categories=None):
-    root = validate_test_folder(ROOT if root is None else root)
+    root = validate_operation_folder(ROOT if root is None else root)
     parent = path.parent
     if parent == root:
         return True
@@ -97,7 +98,7 @@ def safe_destination(path, root=None, categories=None):
 def build_proposals(files, mode, root=None, name_overrides=None, categories=None, ai_config=None):
     if mode not in MODES:
         raise ValueError('Invalid operating mode')
-    root = validate_test_folder(ROOT if root is None else root)
+    root = validate_operation_folder(ROOT if root is None else root)
     allowed = CATEGORIES if categories is None else tuple(categories)
     proposals = []
     hash_counts = Counter(f['sha256'] for f in files)
@@ -128,11 +129,11 @@ def build_proposals(files, mode, root=None, name_overrides=None, categories=None
         elif not valid_filename(new_name, original):
             problem = 'Unsafe filename or changed extension'
         elif not safe_source(src, root):
-            problem = 'Source missing or outside test folder'
+            problem = 'Source missing or outside selected folder'
         elif src.stat().st_size == 0:
             problem = 'Empty file — review manually'
         elif not safe_destination(dst, root, allowed):
-            problem = 'Destination outside test folder'
+            problem = 'Destination outside selected folder'
         elif src == dst:
             problem = 'No change needed'
         elif existing_path_casefold(dst.parent, dst.name) is not None:
@@ -145,6 +146,7 @@ def build_proposals(files, mode, root=None, name_overrides=None, categories=None
                           'category': category, 'suggested': suggested, 'method': method,
                           'sha256': f['sha256'], 'size': f['size'], 'mtime_ns': f['mtime_ns'],
                           'root': root,
+                          'identity': f.get('identity'),
                           'categories': allowed,
                           'duplicate_count': hash_counts[f['sha256']], 'issue': problem})
     collisions = Counter(str(p['dst']).casefold() for p in proposals if p['issue'] is None)
@@ -180,7 +182,7 @@ def build_readonly_proposals(files, mode, root):
 
 def revalidate(proposal, root=None):
     src, dst = proposal['src'], proposal['dst']
-    root = validate_test_folder(ROOT if root is None else root)
+    root = validate_operation_folder(ROOT if root is None else root)
     allowed = proposal.get('categories', CATEGORIES)
     if proposal.get('root') != root or not safe_source(src, root) or not safe_destination(dst, root, allowed):
         return False, 'Path or source changed'
@@ -196,9 +198,10 @@ def revalidate(proposal, root=None):
 
 
 def apply_proposals(proposals, root=None):
-    # Uses exclusive hard link + unlink, never overwrites a destination.
+    # Test fixtures use exclusive hard link + unlink. External folders use a
+    # locked Windows handle rename. Neither engine overwrites a destination.
     # A pending log row is written before filesystem operations. Pending needs human inspection.
-    root = validate_test_folder(ROOT if root is None else root)
+    root = validate_operation_folder(ROOT if root is None else root)
     if history_pending():
         raise RuntimeError('An interrupted operation is pending. Inspect history before proceeding.')
     batch_id = str(uuid.uuid4())
@@ -207,19 +210,30 @@ def apply_proposals(proposals, root=None):
         if p['issue'] is not None:
             outcomes.append((p['original'], 'SKIPPED: ' + p['issue']))
             continue
-        ok, reason = revalidate(p, root)
+        try:
+            ok, reason = revalidate(p, root)
+        except (OSError, ValueError) as exc:
+            outcomes.append((p['original'], 'SKIPPED: Cannot verify file or folder: ' + str(exc)))
+            continue
         if not ok:
             outcomes.append((p['original'], 'SKIPPED: ' + reason))
             continue
         opid = str(uuid.uuid4())
         history_insert(opid, batch_id, p['src'], p['dst'], p['sha256'])
         try:
-            p['dst'].parent.mkdir(parents=True, exist_ok=True)
+            # External directory creation happens only inside the handle-locked
+            # move engine, so a replaced root cannot redirect this write.
+            if is_test_folder(root):
+                p['dst'].parent.mkdir(parents=True, exist_ok=True)
             ok, reason = revalidate(p, root)
             if not ok:
                 raise OSError(f'Safety check failed after preparing destination: {reason}')
-            os.link(p['src'], p['dst'], follow_symlinks=False)
-            p['src'].unlink()
+            if is_test_folder(root):
+                os.link(p['src'], p['dst'], follow_symlinks=False)
+                p['src'].unlink()
+            else:
+                from .windows_moves import move_verified
+                move_verified(p['src'], p['dst'], root, p['sha256'], p.get('identity'))
             history_set(opid, 'moved')
             outcomes.append((p['original'], 'MOVED → ' + str(p['dst'].relative_to(root))))
         except OSError as exc:
@@ -230,7 +244,7 @@ def apply_proposals(proposals, root=None):
 
 
 def undo_preview(root=None):
-    root = validate_test_folder(ROOT if root is None else root)
+    root = validate_operation_folder(ROOT if root is None else root)
     if history_pending():
         raise RuntimeError('Pending operations need manual inspection before Undo.')
     with closing(history_connect()) as conn, conn:
@@ -246,7 +260,7 @@ def undo_preview(root=None):
 
 
 def undo_last_batch(root=None, expected_batch=None):
-    root = validate_test_folder(ROOT if root is None else root)
+    root = validate_operation_folder(ROOT if root is None else root)
     batch, entries = undo_preview(root)
     if expected_batch is not None and batch != expected_batch:
         raise RuntimeError('History changed after the Undo preview. Review it again.')
@@ -268,8 +282,12 @@ def undo_last_batch(root=None, expected_batch=None):
             # Record intent before changing either path, so a crash blocks later
             # operations until the two paths have been inspected.
             history_set(opid, 'pending', 'Undo in progress; inspect both paths if interrupted')
-            os.link(dst, src, follow_symlinks=False)
-            dst.unlink()
+            if is_test_folder(root):
+                os.link(dst, src, follow_symlinks=False)
+                dst.unlink()
+            else:
+                from .windows_moves import move_verified
+                move_verified(dst, src, root, digest)
             history_set(opid, 'undone')
             outcomes.append((dst.name, 'RESTORED → ' + src.name))
         except OSError as exc:

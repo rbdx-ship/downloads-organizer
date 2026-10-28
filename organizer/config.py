@@ -68,7 +68,7 @@ def validate_test_folder(folder):
 
 
 def validate_preview_folder(folder):
-    """Allow a directory for read-only preview, except the real Downloads folder."""
+    """Allow an existing unlinked directory for read-only preview."""
     candidate = Path(folder).absolute()
     if not candidate.is_dir():
         raise ValueError('Choose an existing folder.')
@@ -76,6 +76,12 @@ def validate_preview_folder(folder):
         if current.is_symlink() or current.is_junction():
             raise ValueError('Linked folders and junctions cannot be selected.')
     candidate = candidate.resolve(strict=True)
+    return candidate
+
+
+def is_real_downloads(folder):
+    """Fail closed if the Windows Downloads location cannot be verified."""
+    candidate = Path(folder).resolve(strict=True)
     downloads = {Path.home() / 'Downloads'}
     try:
         import os
@@ -91,5 +97,5 @@ def validate_preview_folder(folder):
     for path in downloads:
         resolved = path.resolve()
         if candidate == resolved or candidate.is_relative_to(resolved):
-            raise ValueError('The real Downloads folder requires a separate safety review and authorization.')
-    return candidate
+            return True
+    return False

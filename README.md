@@ -53,9 +53,8 @@ If you cancel first-time setup, the app uses Python rules only for that session
 and asks again next launch. OpenAI asks for consent before each classification
 run that sends document information. Files with unresolved classifications or
 safety issues cannot be included in an operation; review their status first.
-The app starts safely in `test-downloads`. Other eligible local folders can be
-approved for file changes as described below. The real Windows Downloads folder
-is still blocked.
+The app starts safely in `test-downloads`. Eligible local folders, including
+the Windows Downloads folder, can be approved for file changes as described below.
 
 On first launch, an **AI setup** dialog offers local Ollama, the OpenAI API, or
 Python rules only. This choice can be changed later with **AI settings** in the
@@ -87,8 +86,11 @@ classification and approved file changes, **No** for read-only preview, or
 `YES` to switch. Writable external folders must be on a fixed local NTFS drive;
 system/application folders, hidden folders, known cloud-sync locations, network
 and removable drives, links and junctions are excluded. Choose a dedicated data
-folder and back up important files before using it. The real Windows Downloads
-folder remains blocked pending its separate authorization.
+folder and back up important files before using it. When selecting the real
+Windows Downloads folder, the app first opens a read-only preview. Review it,
+then choose **Change folder**, select the same folder again, choose **Yes** for
+writable access and type `YES`. Review the proposed moves and separately type
+`YES` before anything is moved. Approval lasts for the current session.
 
 An additional safety rule requires writable external target folders to be named
 **Downloads** by default, regardless of the parent path. Matching ignores letter
@@ -98,8 +100,8 @@ settings** in the header to change this required name: the app shows a warning
 and requires exact typed `YES` before saving. Changing it clears existing folder
 approvals and suggestions. To Undo operations in an old folder, restore its
 required name and approve the folder again. Settings do not rename folders.
-This rule adds to the existing safeguards; it does not unlock the real Windows
-Downloads folder or system locations. The developer `test-downloads` sandbox is
+This rule adds to the existing safeguards and does not unlock system locations.
+The developer `test-downloads` sandbox is
 exempt so regression tests and learning examples remain available.
 
 The name is saved locally in ignored `safety_settings.json`, separately from AI

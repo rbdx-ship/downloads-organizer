@@ -191,6 +191,29 @@ class QtInterfaceTests(unittest.TestCase):
             authorize.assert_called_once_with(other)
             self.assertFalse(self.window.read_only)
 
+    def test_downloads_selection_previews_before_writable_confirmation(self):
+        other = self.root / 'Downloads'
+        other.mkdir()
+        (other / 'invoice.txt').write_text('Synthetic fixture')
+        with patch.object(folder_access, '_previewed_downloads', {}), \
+             patch.object(folder_access, '_approved', {}), \
+             patch.object(qt_interface.QFileDialog, 'getExistingDirectory', return_value=str(other)), \
+             patch.object(qt_interface, 'validate_test_folder', side_effect=ValueError('External')), \
+             patch.object(qt_interface, 'validate_preview_folder', return_value=other), \
+             patch.object(qt_interface, 'is_real_downloads', return_value=True), \
+             patch.object(config, 'is_real_downloads', return_value=True), \
+             patch.object(qt_interface, 'validate_external_folder', return_value=other), \
+             patch.object(folder_access, 'validate_external_folder', return_value=other), \
+             patch.object(qt_interface.QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes) as question, \
+             patch.object(qt_interface.QInputDialog, 'getText', return_value=('YES', True)):
+            self.window.choose_folder()
+            self.assertTrue(self.window.read_only)
+            self.assertEqual(self.window.table.rowCount(), 1)
+            question.assert_not_called()
+            self.window.choose_folder()
+            question.assert_called_once()
+            self.assertFalse(self.window.read_only)
+
     def test_select_all_checks_only_ready_files(self):
         (self.root / 'invoice.pdf').write_bytes(b'finance')
         (self.root / 'course.txt').write_bytes(b'learning')

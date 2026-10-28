@@ -6,6 +6,7 @@ from . import config
 from .safety_settings import validate_folder_name
 
 _approved = {}
+_previewed_downloads = {}
 
 
 def is_test_folder(folder):
@@ -18,6 +19,7 @@ def is_test_folder(folder):
 
 def validate_external_folder(folder):
     folder = config.validate_preview_folder(folder)
+    config.is_real_downloads(folder)  # Verify the configured location before approving any external folder.
     validate_folder_name(folder)
     if os.name != 'nt' or str(folder).startswith('\\\\'):
         raise ValueError('Writable external folders require a local Windows drive.')
@@ -51,8 +53,22 @@ def authorize_folder(folder):
     """Call only after the UI's explicit writable-folder confirmation."""
     folder = validate_external_folder(folder)
     st = folder.stat()
+    if config.is_real_downloads(folder) and _previewed_downloads.get(str(folder)) != (st.st_dev, st.st_ino):
+        raise ValueError('Review this Downloads folder in read-only mode before enabling changes.')
     _approved[str(folder)] = (st.st_dev, st.st_ino)
     return folder
+
+
+def record_downloads_preview(folder):
+    folder = config.validate_preview_folder(folder)
+    if config.is_real_downloads(folder):
+        st = folder.stat()
+        _previewed_downloads[str(folder)] = (st.st_dev, st.st_ino)
+
+
+def has_downloads_preview(folder):
+    st = folder.stat()
+    return _previewed_downloads.get(str(folder)) == (st.st_dev, st.st_ino)
 
 
 def validate_operation_folder(folder):

@@ -24,7 +24,8 @@ class SafetySettingsTests(unittest.TestCase):
                 safety_settings.validate_folder_name(folder)
 
     def test_external_validation_enforces_name_before_approval(self):
-        with patch.object(config, 'validate_preview_folder', return_value=Path('D:/Data/Other')):
+        with patch.object(config, 'validate_preview_folder', return_value=Path('D:/Data/Other')), \
+             patch.object(config, 'is_real_downloads', return_value=False):
             with self.assertRaisesRegex(ValueError, 'must be named "Downloads"'):
                 folder_access.authorize_folder(Path('D:/Data/Other'))
 

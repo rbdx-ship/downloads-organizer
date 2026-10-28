@@ -160,6 +160,20 @@ class ExternalFolderTests(unittest.TestCase):
                 folder_access.validate_operation_folder(self.first)
             folder_access._approved.pop(str(self.first), None)
 
+    def test_downloads_requires_readonly_preview_of_same_folder_identity(self):
+        with patch.object(folder_access, 'validate_external_folder', return_value=self.first), \
+             patch.object(config, 'validate_preview_folder', return_value=self.first), \
+             patch.object(config, 'is_real_downloads', return_value=True), \
+             patch.object(folder_access, '_approved', {}), \
+             patch.object(folder_access, '_previewed_downloads', {}):
+            with self.assertRaisesRegex(ValueError, 'read-only'):
+                folder_access.authorize_folder(self.first)
+            folder_access.record_downloads_preview(self.first)
+            self.assertEqual(folder_access.authorize_folder(self.first), self.first)
+            folder_access._previewed_downloads[str(self.first)] = (-1, -1)
+            with self.assertRaisesRegex(ValueError, 'read-only'):
+                folder_access.authorize_folder(self.first)
+
     def test_downloads_project_and_links_are_blocked(self):
         with self.assertRaises(ValueError):
             folder_access.validate_external_folder(config.PROJECT)

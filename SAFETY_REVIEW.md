@@ -1,5 +1,27 @@
 # Folder selection safety review
 
+## Real Downloads review, 2026-10-28
+
+The user requested access to their Windows Downloads folder. The first selection
+now opens a read-only filename-rule preview. A successful preview records that
+folder's device and file identity in memory; only then can a second selection of
+the same folder offer writable access, followed by typed YES. The regular list
+of proposed moves and separate YES confirmation remain mandatory. Permission and
+preview are session-only. The backend refuses to authorize real Downloads if the
+preview is missing or the folder identity changed. The Windows Downloads registry
+location must be readable, and all external-folder restrictions, including local
+fixed NTFS, name rule, links, protected trees and cloud-sync exclusions still
+apply. Existing collision, content identity, pending history and Undo checks
+remain in force. Simulated Downloads paths and disposable fixtures are used for
+tests; no personal Downloads files were read or changed during this review.
+
+Popup backgrounds and text use explicit light/dark colors. A Qt message box was
+rendered and visually checked. AI setup and text-entry dialogs use the same
+contrast rules.
+
+The historical description below records the earlier review; references to the
+real Downloads folder being blocked are superseded by the review above.
+
 Review updated 2026-10-28 for explicitly selected external data folders.
 
 The app starts in `test-downloads`. In the PySide6 interface, eligible external

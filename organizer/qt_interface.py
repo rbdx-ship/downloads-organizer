@@ -14,9 +14,9 @@ from PySide6.QtWidgets import (
     QProgressBar, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from .config import ROOT, MODES, validate_test_folder, validate_preview_folder
+from .config import ROOT, MODES, validate_test_folder, validate_preview_folder, is_real_downloads
 from .folder_access import (validate_operation_folder, validate_external_folder,
-                            authorize_folder, is_test_folder)
+                            authorize_folder, is_test_folder, record_downloads_preview, has_downloads_preview)
 from .classifier import scan, scan_readonly, analyze_files
 from .cache import cached_result, content_cache_write
 from .database_migration import migrate_legacy_databases
@@ -34,6 +34,9 @@ STYLE = """
 QMainWindow { background: #103b37; }
 QWidget#shell { background: #103b37; }
 QWidget { font-family: 'Segoe UI'; font-size: 10pt; color: #183d37; }
+QMessageBox, QInputDialog { background-color: #ffffff; color: #183d37; }
+QMessageBox QLabel, QInputDialog QLabel { color: #183d37; background: transparent; }
+QInputDialog QLineEdit, QInputDialog QTextEdit, QInputDialog QPlainTextEdit { background: #ffffff; color: #183d37; border: 1px solid #a7beb2; }
 QFrame#surface { background: #ffffff; border-radius: 18px; }
 QFrame#folderCard { background: #f0f6f3; border-radius: 14px; }
 QLabel#eyebrow { color: #486a60; font-size: 9pt; font-weight: 700; letter-spacing: 1px; }
@@ -572,7 +575,17 @@ class OrganizerWindow(QMainWindow):
             return
         writable_external = False
         read_only_reason = ''
+        first_downloads_preview = False
         if read_only:
+            try:
+                first_downloads_preview = is_real_downloads(selected) and not (self.read_only and self.selected_root == selected and has_downloads_preview(selected))
+            except ValueError as exc:
+                QMessageBox.critical(self, 'Folder unavailable', str(exc))
+                return
+        if read_only and first_downloads_preview:
+            read_only_reason = ('Review this read-only preview first. To enable changes, choose this folder again, '
+                                'select Yes and confirm. Review every proposed move before approval.')
+        elif read_only:
             try:
                 validate_external_folder(selected)
             except (OSError, ValueError) as exc:
@@ -623,7 +636,9 @@ class OrganizerWindow(QMainWindow):
             if not preserve_classified:
                 self.classified = self.read_only
             self.refresh_history_state()
-            self.prepare()
+            prepared = self.prepare()
+            if self.read_only and prepared and is_real_downloads(self.selected_root):
+                record_downloads_preview(self.selected_root)
             if warnings:
                 QMessageBox.warning(self, 'Some files could not be scanned', '\n'.join(warnings[:10]))
         except Exception as exc:
@@ -1002,6 +1017,10 @@ class OrganizerWindow(QMainWindow):
 
 def main():
     app = QApplication.instance() or QApplication(sys.argv)
+    app.setStyleSheet('QMessageBox, QInputDialog { background: #ffffff; color: #183d37; } '
+                      'QMessageBox QLabel, QInputDialog QLabel { color: #183d37; background: transparent; } '
+                      'QInputDialog QLineEdit, QInputDialog QTextEdit, QInputDialog QPlainTextEdit '
+                      '{ background: white; color: #183d37; }')
     try:
         from .config import PROJECT
         PROJECT.mkdir(parents=True, exist_ok=True)

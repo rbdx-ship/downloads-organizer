@@ -9,6 +9,49 @@ python -m pip install -r requirements.txt
 python downloads_organizer.py
 ```
 
+## How to use the app
+
+Follow this flow from opening the app to reviewing and approving changes.
+Classifying files only proposes names and categories; it does not move or rename
+them. Ready files are checked automatically, so you do not need to select every
+row yourself.
+
+```mermaid
+flowchart TD
+    Open["Open the app"] --> Saved{"AI setup already saved?"}
+    Saved -->|Yes| Files["See files in the current folder"]
+    Saved -->|No| Setup["Choose local Ollama, OpenAI API, or Python rules only"]
+    Setup --> Configure["Follow setup steps, test AI if selected, and save"]
+    Configure --> Files
+    Files --> Folder{"Use the current folder?"}
+    Folder -->|No| Change["Click Change folder, choose a folder, and type YES"]
+    Change --> Access{"Folder permits file changes?"}
+    Access -->|No| ReadOnly["Read-only preview; choose a test folder to organize files"]
+    ReadOnly --> Change
+    Access -->|Yes| Classify
+    Folder -->|Yes| Classify["Click Classify; review or edit categories when prompted"]
+    Classify --> Run["Wait for Python rules and optional AI classification"]
+    Run --> Summary["View the classification summary chart"]
+    Summary --> Review["Review proposed names and categories; edit names or uncheck files as needed"]
+    Review --> Mode["Choose Rename + Organize, Organize only, or Rename only"]
+    Mode --> Organize["Click Review & organize"]
+    Organize --> Preview["Review every proposed change in the confirmation window"]
+    Preview --> Approve{"Approve and type YES?"}
+    Approve -->|No| Review
+    Approve -->|Yes| Apply["Apply approved changes and review the result"]
+    Apply --> Undo{"Want to reverse the latest batch?"}
+    Undo -->|No| Done["Continue or close the app"]
+    Undo -->|Yes| Restore["In the same folder, click Undo and review and confirm the reversal"]
+    Restore --> Done
+```
+
+If you cancel first-time setup, the app uses Python rules only for that session
+and asks again next launch. OpenAI asks for consent before each classification
+run that sends document information. Files with unresolved classifications or
+safety issues cannot be included in an operation; review their status first.
+File changes and Undo currently work only within `test-downloads` and its
+unlinked subfolders. The real Windows Downloads folder is blocked.
+
 On first launch, an **AI setup** dialog offers local Ollama, the OpenAI API, or
 Python rules only. This choice can be changed later with **AI settings** in the
 window header. Cancelling first-run setup temporarily uses rules only and asks

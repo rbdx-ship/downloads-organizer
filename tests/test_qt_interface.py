@@ -1,6 +1,8 @@
 import shutil
 import tempfile
 import unittest
+import threading
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -34,6 +36,7 @@ class QtInterfaceTests(unittest.TestCase):
             patch.object(cache, 'DB_PATH', self.base / 'cache.db'),
             patch.object(cache, 'PROJECT', self.base),
             patch.object(safety_settings, 'SETTINGS_PATH', self.base / 'safety_settings.json'),
+            patch.object(qt_interface.QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes),
         ]
         for item in patches:
             item.start()
@@ -228,6 +231,49 @@ class QtInterfaceTests(unittest.TestCase):
         self.window.categories = config.CATEGORIES
         self.window.analyze()
         self.window.show_classification_summary.assert_called_once()
+
+    def test_classification_confirmation_has_time_and_cancel_preserves_state(self):
+        (self.root / 'ambiguous.txt').write_text('Synthetic document')
+        self.window.refresh()
+        self.window.categories = config.CATEGORIES
+        with patch.object(qt_interface.QMessageBox, 'question', return_value=QMessageBox.StandardButton.No) as question, \
+             patch.object(qt_interface, 'analyze_files') as analyze:
+            self.window.analyze()
+        self.assertIn('Estimated duration:', question.call_args.args[2])
+        self.assertIn('1 unique files will use AI', question.call_args.args[2])
+        analyze.assert_not_called()
+        self.assertFalse(self.window.classified)
+        self.assertFalse(self.window.busy)
+        self.assertFalse(cache.DB_PATH.exists())
+
+    def test_live_eta_and_batch_progress_stop_after_worker_finishes(self):
+        (self.root / 'ambiguous.txt').write_text('Synthetic document')
+        self.window.refresh()
+        self.window.categories = config.CATEGORIES
+        gate = threading.Event()
+        def analyze(*args, **kwargs):
+            gate.wait(5)
+            return {'ambiguous.txt': {'category':'Learning', 'suggested_name':'notes.txt', 'reason':'fixture'}}
+        with patch.object(qt_interface, 'analyze_files', side_effect=analyze):
+            try:
+                self.window.analyze()
+                self.assertTrue(self.window.busy)
+                self.assertTrue(self.window.eta_timer.isActive())
+                self.assertIn('Estimated remaining:', self.window.progress_label.text())
+                self.assertEqual(self.window.progress_bar.maximum(), 1)
+                self.window._run_timing.started -= 1000
+                self.window.update_classification_eta()
+                self.assertIn('Taking longer than estimated', self.window.progress_label.text())
+            finally:
+                gate.set()
+                deadline = time.monotonic() + 5
+                while self.window.busy and time.monotonic() < deadline:
+                    self.application.processEvents()
+                    time.sleep(.01)
+        self.assertFalse(self.window.busy)
+        self.assertFalse(self.window.eta_timer.isActive())
+        self.assertEqual(self.window.progress_bar.value(), 1)
+        self.assertEqual(len(self.window._timing_samples[self.window.ai_config.cache_model]), 1)
 
     def test_workflow_primary_action_tracks_classification_and_checks(self):
         self.assertFalse(self.window.ai_btn.isEnabled())

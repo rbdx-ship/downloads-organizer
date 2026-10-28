@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 import threading
+import time
 
 from PySide6.QtCore import QObject, Qt, Signal, QTimer, QRectF
 from PySide6.QtGui import QColor, QPainter, QPen
@@ -22,6 +23,7 @@ from .database_migration import migrate_legacy_databases
 from . import categories as category_store
 from . import providers
 from . import safety_settings
+from .classification_timing import BATCH_SIZE, RunTiming, estimate, time_range
 from .ai_settings import AIConfig
 from .ai_setup_dialog import AISetupDialog, startup_config
 from .file_manager import (history_init, history_pending, build_proposals,
@@ -170,6 +172,7 @@ class ClassificationSummary(QDialog):
 
 
 class AnalysisSignals(QObject):
+    progress = Signal(int, float, int, bool)
     finished = Signal(int, int, list)
 
 
@@ -217,6 +220,13 @@ class OrganizerWindow(QMainWindow):
         self._loading_table = False
         self.signals = AnalysisSignals(self)
         self.signals.finished.connect(self.analysis_finished)
+        self.signals.progress.connect(self.analysis_progress)
+        self._timing_samples = {}
+        self._run_timing = None
+        self._run_model = None
+        self.eta_timer = QTimer(self)
+        self.eta_timer.setInterval(1000)
+        self.eta_timer.timeout.connect(self.update_classification_eta)
         history_init()
         self.setWindowTitle('Downloads Organizer')
         self.resize(1280, 800)
@@ -323,6 +333,7 @@ class OrganizerWindow(QMainWindow):
         self.spinner = Spinner()
         progress_layout.addWidget(self.spinner)
         self.progress_label = self._label('Classification in progress…', 'subtitle')
+        self.progress_label.setWordWrap(True)
         progress_layout.addWidget(self.progress_label)
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)
@@ -532,6 +543,8 @@ class OrganizerWindow(QMainWindow):
             self.spinner.timer.start(80)
         else:
             self.spinner.timer.stop()
+            self.eta_timer.stop()
+            self._run_timing = None
         self.update_select_all()
 
     def closeEvent(self, event):
@@ -710,11 +723,39 @@ class OrganizerWindow(QMainWindow):
             return
         if self.categories is None and not self.edit_categories():
             return
-        self.classified = True
-        self.prepare()
         active_config = self.ai_config
         unresolved = [f for f in self.files if f['rule_category'] not in self.categories
                       and cached_result(f, self.categories, active_config)[0] is None]
+        unique = {}
+        for f in unresolved:
+            unique.setdefault((f['sha256'], f['extension']), f)
+        reps = list(unique.values()) if active_config.provider != 'rules' else []
+        duplicate_count = len(unresolved) - len(unique) if reps else 0
+        low, high = estimate(active_config.provider, len(reps), len(self.files),
+                             self._timing_samples.get(active_config.cache_model, ()))
+        basis = ('Based on successful batches this session.' if self._timing_samples.get(active_config.cache_model)
+                 and reps else 'Rough initial estimate; actual time may vary.')
+        message = (f'{len(self.files)} files in this folder.\n'
+                   f'{len(self.files)-len(unresolved)} can use Python rules or cached results.\n'
+                   f'{len(reps)} unique files will use AI; {duplicate_count} duplicate copies can reuse results.\n'
+                   f'Estimated duration: {time_range(low, high)}\n{basis}\n'
+                   'Model loading, document complexity, hardware and network speed affect the time. '
+                   'Files will not be renamed or moved.\n\n')
+        if active_config.provider == 'rules':
+            message += f'AI is disabled; {len(unresolved)} files may remain unresolved.\n\n'
+        if active_config.provider == 'openai' and reps:
+            message += (f'OpenAI model: {active_config.model}\n'
+                        'Up to 1,200 characters of extracted text per document, the extension, numeric file ID '
+                        'and chosen categories will be sent. Filenames are sent when text is unavailable. '
+                        'Full files are not uploaded. API usage charges apply.\n\n')
+        message += 'Start classification?'
+        if QMessageBox.question(self, 'Confirm classification', message,
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            self.status.setText('Classification cancelled. No new analysis was started.')
+            return
+        self.classified = True
+        self.prepare()
         if active_config.provider == 'rules':
             self.status.setText(f'Python rules classified {len(self.files)-len(unresolved)} files. '
                                 f'{len(unresolved)} remain unresolved; enable AI in AI settings if needed.')
@@ -725,29 +766,22 @@ class OrganizerWindow(QMainWindow):
             self.show_classification_summary()
             return
         active_categories = self.categories
-        if active_config.provider == 'openai':
-            answer = QMessageBox.question(self, 'Allow cloud classification?',
-                f'OpenAI model: {active_config.model}\n\n'
-                f'Classify up to {len(unresolved)} ambiguous files using the OpenAI API? '
-                'Up to 1,200 characters of extracted text per document, the extension, numeric file ID and chosen categories '
-                'will be sent. Filenames are sent when text is unavailable. Full files are not uploaded. '
-                'Duplicate content may be grouped. API usage charges apply.',
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
-            if answer != QMessageBox.StandardButton.Yes:
-                self.status.setText('Cloud classification cancelled. No document text was sent.')
-                return
         self.set_busy(True)
-        self.progress_label.setText(f'Classifying with {active_config.label}…')
+        self._run_model = active_config.cache_model
+        self._run_timing = RunTiming(len(reps), low, high, time.monotonic())
+        self.progress_bar.setRange(0, len(reps))
+        self.progress_bar.setValue(0)
+        self.update_classification_eta()
+        self.eta_timer.start()
         self.status.setText(f'Analyzing {len(unresolved)} files with {active_config.label}…')
 
         def worker():
-            errors, completed, unique = [], 0, {}
+            errors, completed = [], 0
             try:
-                for f in unresolved:
-                    unique.setdefault((f['sha256'], f['extension']), f)
-                reps = list(unique.values())
-                for start in range(0, len(reps), 10):
-                    batch = reps[start:start + 10]
+                for start in range(0, len(reps), BATCH_SIZE):
+                    batch = reps[start:start + BATCH_SIZE]
+                    batch_started = time.monotonic()
+                    before = completed
                     try:
                         results = analyze_files(batch, warnings=errors, categories=active_categories, ai_config=active_config)
                         for f in batch:
@@ -764,11 +798,29 @@ class OrganizerWindow(QMainWindow):
                                 errors.append(f"{f['filename']}: could not save the result to the cache ({exc}).")
                     except Exception as exc:
                         errors.append(providers.error_message(exc, active_config))
+                    finally:
+                        self.signals.progress.emit(start + len(batch), time.monotonic() - batch_started,
+                                                   len(batch), completed - before == len(batch))
             except Exception as exc:
                 errors.append(f'Analysis could not be completed: {exc}')
             finally:
                 self.signals.finished.emit(completed, len(unresolved) - len(unique), errors)
         threading.Thread(target=worker, daemon=True).start()
+
+    def update_classification_eta(self):
+        if self.busy and self._run_timing is not None:
+            self.progress_label.setText(self._run_timing.text(time.monotonic()))
+
+    def analysis_progress(self, checked, elapsed, count, successful):
+        if not self.busy or self._run_timing is None:
+            return
+        if successful and count and elapsed > 0:
+            samples = self._timing_samples.setdefault(self._run_model, [])
+            samples.append(elapsed / count)
+            del samples[:-20]
+        self._run_timing.observe(checked, time.monotonic())
+        self.progress_bar.setValue(checked)
+        self.update_classification_eta()
 
     def analysis_finished(self, completed, grouped, errors):
         self.set_busy(False)

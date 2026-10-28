@@ -35,7 +35,8 @@ flowchart TD
     ReadOnly --> Change
     Access -->|Yes| Classify
     Folder -->|Yes| Classify["Click Classify; review or edit categories when prompted"]
-    Classify --> Run["Wait for Python rules and optional AI classification"]
+    Classify --> Estimate["Review the estimated duration and confirm classification"]
+    Estimate --> Run["Watch progress, elapsed time, and estimated time remaining"]
     Run --> Summary["View the classification summary chart"]
     Summary --> Review["Review proposed names and categories; edit names or uncheck files as needed"]
     Review --> Mode["Choose Rename + Organize, Organize only, or Rename only"]
@@ -117,11 +118,22 @@ mode (**Test folder**, **Approved folder**, or **Read-only preview**) are shown 
 the window. Folder actions (**Change folder**, **Refresh** and
 **Edit categories**) are grouped in the folder card. On opening a test folder,
 the app lists its files. The main action at the bottom right is **Classify**.
-Click it to review five starter categories (editable per folder), then
-run Python rules and the configured AI provider for files that need it. In
+Click it to review five starter categories (editable per folder), then review
+the estimated duration and confirm classification. The confirmation counts files
+that can use Python rules/cache, unique files requiring AI, and duplicate copies
+that can reuse results. OpenAI data consent is included in this confirmation when
+needed. Cancelling does not start new analysis. The app then runs Python rules
+and the configured AI provider for files that need it. In
 rules-only mode, ambiguous files remain unresolved. The table shows the proposed
-name and category. While AI is working, an animated spinner and progress
-bar indicate activity without estimating a percentage. When classification
+name and category. While AI is working, an animated spinner remains active,
+and a progress bar advances as AI batches are checked. Elapsed time and an
+estimated remaining time range update every second. Initial estimates are rough
+heuristics; successful batches improve estimates for that provider/model during
+the current session. They are not saved to disk. Hardware, model loading,
+document complexity and network speed affect duration. If an estimate is exceeded,
+the UI explicitly says the task is taking longer; it does not promise completion
+at zero. Rules/cache-only runs generally finish too quickly to need a countdown.
+When classification
 finishes, a chart shows Python-rule results, AI results (including cached AI),
 and unresolved files. Ready files are checked by default; use the checkboxes or
 **Select all ready files** to adjust the selection. The main action becomes

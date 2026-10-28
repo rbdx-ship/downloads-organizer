@@ -12,6 +12,23 @@ Deleting/replacing the approved folder invalidates permission. Approval is not
 recursive and is not persisted on disk. Existing categories/history remain
 available when the same folder is explicitly approved on a later launch.
 
+An additional folder-name guard now requires external writable targets to have
+the final directory name `Downloads` by default, ignoring case. This is the
+selected working folder, not a requirement on category subfolders. The rule is
+enforced in the backend external-folder validator, including authorization,
+classification, proposal revalidation, moves, categories and Undo. Folder names
+elsewhere in the parent path do not qualify. The internal test sandbox is exempt.
+`Safety settings` changes the name after a warning and exact typed YES. The saved
+name is validated as one Windows folder component and written atomically to
+ignored `safety_settings.json`; corrupt or unreadable settings block external
+writes. Successful saves revoke all session approvals and clear the current
+window's suggestions; an external selection becomes read-only until approved
+again. Other windows' proposals cannot bypass backend permission checks. Changing
+the setting neither renames folders nor alters databases/cache keys. Undo in a
+folder with the old name requires restoring that setting and reapproving it.
+This extra condition does not authorize the real Downloads folder or remove
+any path, drive, link, confirmation or file-identity protections.
+
 Writable external folders require a fixed local NTFS drive. Drive roots, the
 home directory and its ancestors, the app checkout and its ancestors/descendants,
 system/application data trees, hidden directories, known OneDrive locations,

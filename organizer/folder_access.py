@@ -3,6 +3,7 @@ import ctypes
 import os
 from pathlib import Path
 from . import config
+from .safety_settings import validate_folder_name
 
 _approved = {}
 
@@ -17,6 +18,7 @@ def is_test_folder(folder):
 
 def validate_external_folder(folder):
     folder = config.validate_preview_folder(folder)
+    validate_folder_name(folder)
     if os.name != 'nt' or str(folder).startswith('\\\\'):
         raise ValueError('Writable external folders require a local Windows drive.')
     protected = [Path.home(), config.PROJECT, Path(folder.anchor)]

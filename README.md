@@ -91,6 +91,23 @@ and removable drives, links and junctions are excluded. Choose a dedicated data
 folder and back up important files before using it. The real Windows Downloads
 folder remains blocked pending its separate authorization.
 
+An additional safety rule requires writable external target folders to be named
+**Downloads** by default, regardless of the parent path. Matching ignores letter
+case and checks the selected folder itself, not its parents or category
+subfolders. Other names are available only for read-only preview. Use **Safety
+settings** in the header to change this required name: the app shows a warning
+and requires exact typed `YES` before saving. Changing it clears existing folder
+approvals and suggestions. To Undo operations in an old folder, restore its
+required name and approve the folder again. Settings do not rename folders.
+This rule adds to the existing safeguards; it does not unlock the real Windows
+Downloads folder or system locations. The developer `test-downloads` sandbox is
+exempt so regression tests and learning examples remain available.
+
+The name is saved locally in ignored `safety_settings.json`, separately from AI
+settings and credentials. If that file is invalid, external writes are blocked
+until a valid name is saved in **Safety settings**. Databases and classifications
+are preserved when the name changes.
+
 Writable-folder approval lasts only for the current app session and only for
 the selected folder, not all its subfolders. On a later launch, select and approve
 it again. Only immediate files are scanned; category folders are not recursively

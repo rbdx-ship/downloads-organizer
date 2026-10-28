@@ -21,6 +21,7 @@ from .cache import cached_result, content_cache_write
 from .database_migration import migrate_legacy_databases
 from . import categories as category_store
 from . import providers
+from . import safety_settings
 from .ai_settings import AIConfig
 from .ai_setup_dialog import AISetupDialog, startup_config
 from .file_manager import (history_init, history_pending, build_proposals,
@@ -261,6 +262,9 @@ class OrganizerWindow(QMainWindow):
         self.ai_settings_btn = self._button('AI settings', self.edit_ai_settings)
         self.ai_settings_btn.setObjectName('quiet')
         header.addWidget(self.ai_settings_btn)
+        self.safety_settings_btn = self._button('Safety settings', self.edit_safety_settings)
+        self.safety_settings_btn.setObjectName('quiet')
+        header.addWidget(self.safety_settings_btn)
         main.addLayout(header)
         self.intro_label = self._label('Choose a folder. Classify its files. Review and organize.', 'subtitle')
         main.addWidget(self.intro_label)
@@ -438,7 +442,7 @@ class OrganizerWindow(QMainWindow):
         ready = sum(not p['issue'] for p in self.proposals)
         reviewing = self.classified and idle
 
-        for control in (self.folder_btn, self.scan_btn, self.ai_settings_btn, self.table):
+        for control in (self.folder_btn, self.scan_btn, self.ai_settings_btn, self.safety_settings_btn, self.table):
             control.setEnabled(idle)
         self.category_btn.setEnabled(idle and writable)
         self.undo_btn.setEnabled(idle and writable and self.has_undo)
@@ -554,11 +558,12 @@ class OrganizerWindow(QMainWindow):
         if selected == self.selected_root and not self.read_only:
             return
         writable_external = False
+        read_only_reason = ''
         if read_only:
             try:
                 validate_external_folder(selected)
-            except (OSError, ValueError):
-                pass  # Ineligible writable folders can still use the existing read-only preview.
+            except (OSError, ValueError) as exc:
+                read_only_reason = str(exc)
             else:
                 choice = QMessageBox.question(self, 'Folder access',
                     f'Folder: {selected}\n\nAllow classification, approved renames/moves, and Undo here? '
@@ -570,7 +575,7 @@ class OrganizerWindow(QMainWindow):
                     return
                 writable_external = choice == QMessageBox.StandardButton.Yes
                 read_only = not writable_external
-        warning = ('\n\nREAD-ONLY: files can be previewed but not changed or analyzed.' if read_only else
+        warning = ('\n\nREAD-ONLY: files can be previewed but not changed or analyzed.\n' + read_only_reason if read_only else
                    '\n\nWRITABLE: classification can read document text. Approved operations can rename/move files here. '
                    'Back up important files first. Undo applies to this folder only.')
         answer, ok = QInputDialog.getText(self, 'Confirm folder change',
@@ -781,6 +786,49 @@ class OrganizerWindow(QMainWindow):
                 if (item := self.table.item(row, 0)) is not None
                 and item.flags() & Qt.ItemFlag.ItemIsUserCheckable
                 and item.checkState() == Qt.CheckState.Checked]
+
+    def edit_safety_settings(self):
+        if self.busy:
+            return
+        needs_repair = False
+        try:
+            current = safety_settings.required_name()
+        except ValueError as exc:
+            QMessageBox.warning(self, 'Safety settings need attention', str(exc))
+            current = safety_settings.DEFAULT_FOLDER_NAME
+            needs_repair = True
+        name, ok = QInputDialog.getText(self, 'Safety settings',
+            'Required name for writable target folders (not the category subfolders).\n'
+            'Default: Downloads. Matching ignores letter case.\n'
+            'The developer test-downloads sandbox remains available for testing.', text=current)
+        if not ok or (name == current and not needs_repair):
+            return
+        try:
+            safety_settings.validate_name(name)
+        except ValueError as exc:
+            QMessageBox.warning(self, 'Invalid folder name', str(exc))
+            return
+        answer, ok = QInputDialog.getText(self, 'Warning: change folder safety rule',
+            f'Current required name: {current}\nNew required name: {name}\n\n'
+            'This changes which folders can be approved for file changes. '
+            'Existing approvals and displayed suggestions will be cleared. '
+            'Folders with the old name will become read-only, including for Undo, '
+            'until you restore that name in settings. No folders will be renamed. '
+            'Other safety restrictions still apply.\n\nType YES to save:')
+        if not ok or answer != 'YES':
+            return
+        try:
+            safety_settings.save_name(name)
+        except (OSError, ValueError) as exc:
+            QMessageBox.critical(self, 'Could not save safety settings', str(exc))
+            return
+        if not is_test_folder(self.selected_root):
+            self.read_only = True
+            self.categories = None
+        self.classified = self.read_only
+        self.edited_names = {}
+        self._update_folder_label()
+        self.refresh()
 
     def edit_ai_settings(self):
         if self.busy:

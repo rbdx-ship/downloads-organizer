@@ -14,6 +14,8 @@ step8_actions.jsonl
 ai_settings.json
 setup-downloads/
 ai-settings-*.tmp
+safety_settings.json
+safety-settings-*.tmp
 
 # Local credentials, private documents, and historical notebook outputs.
 .env

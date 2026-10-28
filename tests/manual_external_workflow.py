@@ -12,7 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 import shiboken6
-from organizer import cache, categories, config, file_manager, folder_access, qt_interface
+from organizer import cache, categories, config, file_manager, folder_access, qt_interface, safety_settings
 from organizer.ai_settings import AIConfig
 
 
@@ -23,10 +23,17 @@ def run():
          tempfile.TemporaryDirectory(dir=config.ROOT, prefix='external-smoke-data-') as data, ExitStack() as stack:
         base, data = Path(outside).resolve(), Path(data).resolve()
         assert base.parent == parent and base.name.startswith('organizer-external-smoke-')
-        first, second = base/'first', base/'second'
+        stack.enter_context(patch.object(safety_settings, 'SETTINGS_PATH', data/'safety_settings.json'))
+        first, second = base/'first'/'Downloads', base/'second'/'Downloads'
         for folder in (first, second):
-            folder.mkdir()
+            folder.mkdir(parents=True)
             (folder/'invoice.txt').write_text('Synthetic invoice fixture', encoding='utf-8')
+        try:
+            folder_access.authorize_folder(first.parent)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('A folder not named Downloads was approved')
         for module, name, value in [(file_manager, 'PROJECT', data), (file_manager, 'HISTORY_DB', data/'history.db'),
                                     (cache, 'PROJECT', data), (cache, 'DB_PATH', data/'cache.db')]:
             stack.enter_context(patch.object(module, name, value))
@@ -55,11 +62,20 @@ def run():
                 assert (folder/'Finance'/'invoice.txt').is_file()
                 assert not (folder/'invoice.txt').exists()
             assert review.call_count == 2
+            safety_settings.save_name('Incoming')
+            try:
+                folder_access.validate_operation_folder(first)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('Old folder remained writable after the safety rule changed')
+            safety_settings.save_name('Downloads')
             choose(first)
             window.confirm_undo()
             assert (first/'invoice.txt').is_file()
             assert (second/'Finance'/'invoice.txt').is_file()
             assert categories.load(first) == ('Finance', 'Other')
+            choose(second)
             assert categories.load(second) == ('Finance', 'Learning', 'Other')
             window.close()
             shiboken6.delete(window)

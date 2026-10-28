@@ -7,7 +7,7 @@ from unittest.mock import patch
 from PySide6.QtWidgets import QApplication, QMessageBox, QDialog
 from PySide6.QtCore import Qt
 import shiboken6
-from organizer import cache, classifier, config, file_manager, qt_interface, categories
+from organizer import cache, classifier, config, file_manager, qt_interface, categories, safety_settings, folder_access
 from organizer.ai_settings import AIConfig
 
 
@@ -33,6 +33,7 @@ class QtInterfaceTests(unittest.TestCase):
             patch.object(file_manager, 'HISTORY_DB', self.base / 'history.db'),
             patch.object(cache, 'DB_PATH', self.base / 'cache.db'),
             patch.object(cache, 'PROJECT', self.base),
+            patch.object(safety_settings, 'SETTINGS_PATH', self.base / 'safety_settings.json'),
         ]
         for item in patches:
             item.start()
@@ -47,6 +48,33 @@ class QtInterfaceTests(unittest.TestCase):
     def close_window(self):
         self.window.close()
         shiboken6.delete(self.window)
+
+    def test_safety_setting_requires_exact_confirmation(self):
+        self.window.classified = True
+        with patch.object(qt_interface.QInputDialog, 'getText', side_effect=[('Incoming', True), ('yes', True)]):
+            self.window.edit_safety_settings()
+        self.assertEqual(safety_settings.required_name(), 'Downloads')
+        self.assertFalse(safety_settings.SETTINGS_PATH.exists())
+        with patch.object(qt_interface.QInputDialog, 'getText', side_effect=[('Incoming', True), ('YES', True)]):
+            self.window.edit_safety_settings()
+        self.assertEqual(safety_settings.required_name(), 'Incoming')
+        self.assertFalse(self.window.classified)
+
+    def test_safety_setting_change_revokes_current_external_access(self):
+        self.window.classified = True
+        with patch.object(qt_interface, 'is_test_folder', return_value=False), \
+             patch.object(qt_interface.QInputDialog, 'getText', side_effect=[('Incoming', True), ('YES', True)]):
+            self.window.edit_safety_settings()
+        self.assertTrue(self.window.read_only)
+        self.assertIsNone(self.window.categories)
+        self.assertFalse(self.window.apply_btn.isEnabled())
+
+    def test_corrupt_safety_settings_can_be_repaired_to_default(self):
+        safety_settings.SETTINGS_PATH.write_text('not valid JSON', encoding='utf-8')
+        with patch.object(qt_interface.QMessageBox, 'warning'), \
+             patch.object(qt_interface.QInputDialog, 'getText', side_effect=[('Downloads', True), ('YES', True)]):
+            self.window.edit_safety_settings()
+        self.assertEqual(safety_settings.required_name(), 'Downloads')
 
     @staticmethod
     def simulated_link(src, dst, **kwargs):
